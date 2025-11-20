@@ -1,0 +1,55 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leases    Lease[]
+
+  @@index([name])
+}
+
+model Lease {
+  id          String    @id @default(cuid())
+  propertyId  String
+  tenantName  String
+  suite       String?
+  squareFeet  Int?
+  baseRent    Float?
+  leaseStart  DateTime?
+  leaseEnd    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  documents   LeaseDocument[]
+
+  @@index([propertyId])
+  @@index([tenantName])
+}
+
+model LeaseDocument {
+  id            String   @id @default(cuid())
+  leaseId       String
+  filePath      String
+  extractedText String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lease         Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([leaseId])
+}

@@ -1,0 +1,6 @@
+property_name,address,tenant_name,suite,square_feet,base_rent,lease_start,lease_end
+Downtown Business Plaza,123 Main Street Anytown CA 90210,Acme Corporation,101,2500,5000,2023-01-01,2025-12-31
+Downtown Business Plaza,123 Main Street Anytown CA 90210,Tech Innovations LLC,202,3200,7500,2023-06-01,2028-05-31
+Downtown Business Plaza,123 Main Street Anytown CA 90210,Green Energy Co,305,1800,3800,2024-01-15,2029-01-14
+Riverside Office Park,456 River Road Anytown CA 90211,Financial Advisors Inc,Suite A,4500,12000,2022-03-01,2027-02-28
+Riverside Office Park,456 River Road Anytown CA 90211,Law Firm Partners,Suite B,3800,9500,2023-09-01,2026-08-31
