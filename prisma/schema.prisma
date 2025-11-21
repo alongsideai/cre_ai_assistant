@@ -36,6 +36,7 @@ model Lease {
 
   property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   documents   LeaseDocument[]
+  chunks      LeaseDocumentChunk[]
 
   @@index([propertyId])
   @@index([tenantName])
@@ -52,4 +53,18 @@ model LeaseDocument {
   lease         Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
 
   @@index([leaseId])
+}
+
+model LeaseDocumentChunk {
+  id         String   @id @default(cuid())
+  leaseId    String
+  chunkIndex Int
+  content    String
+  embedding  String   @default("[]") // JSON array of floats
+  createdAt  DateTime @default(now())
+
+  lease      Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([leaseId])
+  @@index([leaseId, chunkIndex])
 }

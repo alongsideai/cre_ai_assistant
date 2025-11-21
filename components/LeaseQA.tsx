@@ -1,17 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import { LeaseQuestionResponse } from '@/lib/types';
 
 interface LeaseQAProps {
   leaseId: string;
+  hasDocument?: boolean;
 }
 
 interface QAHistoryItem {
   question: string;
   answer: string;
+  mode: 'rag' | 'metadata_only';
+  sourceChunks?: {
+    chunkIndex: number;
+    snippet: string;
+    similarity?: number;
+  }[];
 }
 
-export default function LeaseQA({ leaseId }: LeaseQAProps) {
+export default function LeaseQA({ leaseId, hasDocument = false }: LeaseQAProps) {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,18 +37,17 @@ export default function LeaseQA({ leaseId }: LeaseQAProps) {
     setError(null);
 
     try {
-      const response = await fetch('/api/ask-lease', {
+      const response = await fetch(`/api/leases/${leaseId}/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          leaseId,
           question: question.trim(),
         }),
       });
 
-      const data = await response.json();
+      const data: LeaseQuestionResponse = await response.json();
 
       if (response.ok) {
         setHistory([
@@ -48,11 +55,13 @@ export default function LeaseQA({ leaseId }: LeaseQAProps) {
           {
             question: question.trim(),
             answer: data.answer,
+            mode: data.mode,
+            sourceChunks: data.sourceChunks,
           },
         ]);
         setQuestion('');
       } else {
-        setError(data.error || 'Failed to get answer');
+        setError((data as any).error || 'Failed to get answer');
       }
     } catch (err) {
       setError('Network error occurred');
@@ -105,10 +114,47 @@ export default function LeaseQA({ leaseId }: LeaseQAProps) {
                   <p className="text-sm font-semibold text-gray-700 mb-1">Question:</p>
                   <p className="text-gray-900">{item.question}</p>
                 </div>
-                <div>
+                <div className="mb-3">
                   <p className="text-sm font-semibold text-gray-700 mb-1">Answer:</p>
                   <p className="text-gray-900 whitespace-pre-wrap">{item.answer}</p>
                 </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-500">Answer source:</span>
+                  {item.mode === 'rag' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-300">
+                      📄 Lease Document + Metadata
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-300">
+                      📋 Lease Metadata Only
+                    </span>
+                  )}
+                </div>
+                {item.sourceChunks && item.sourceChunks.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-xs text-gray-600 cursor-pointer hover:text-gray-800">
+                      Show context ({item.sourceChunks.length} chunks used)
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {item.sourceChunks.map((chunk, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-white border border-gray-200 rounded p-2 text-xs"
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-gray-500">Chunk {chunk.chunkIndex + 1}</span>
+                            {chunk.similarity !== undefined && (
+                              <span className="text-gray-500">
+                                Relevance: {(chunk.similarity * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-700">{chunk.snippet}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             ))}
           </div>

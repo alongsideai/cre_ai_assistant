@@ -33,12 +33,20 @@ export default function Home() {
           {/* Navigation */}
           <section className="bg-blue-50 p-6 rounded-lg border border-blue-200">
             <h2 className="text-xl font-semibold mb-4">View Portfolio</h2>
-            <Link
-              href="/properties"
-              className="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors"
-            >
-              View Properties & Leases
-            </Link>
+            <div className="flex gap-3">
+              <Link
+                href="/dashboard"
+                className="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors"
+              >
+                View Portfolio Dashboard
+              </Link>
+              <Link
+                href="/properties"
+                className="inline-block bg-gray-600 text-white px-6 py-2 rounded hover:bg-gray-700 transition-colors"
+              >
+                View Properties & Leases
+              </Link>
+            </div>
           </section>
         </div>
       </div>

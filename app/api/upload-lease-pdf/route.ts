@@ -4,6 +4,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import pdf from 'pdf-parse';
 import { prisma } from '@/lib/prisma';
+import { ingestLeaseDocument } from '@/lib/leaseIngestion';
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,6 +66,27 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Trigger document ingestion (chunking + embedding)
+    let ingestionResult = null;
+    try {
+      console.log(`Starting ingestion for lease ${leaseId}`);
+      ingestionResult = await ingestLeaseDocument({
+        leaseId,
+        filePath: filepath,
+      });
+      console.log(
+        `Ingestion completed for lease ${leaseId}: ${ingestionResult.chunksCreated} chunks created`
+      );
+    } catch (ingestionError) {
+      console.error(`Ingestion failed for lease ${leaseId}:`, ingestionError);
+      // Don't fail the upload if ingestion fails
+      ingestionResult = {
+        success: false,
+        chunksCreated: 0,
+        error: (ingestionError as Error).message,
+      };
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Lease PDF uploaded successfully',
@@ -73,6 +95,7 @@ export async function POST(request: NextRequest) {
         filename,
         textLength: extractedText.length,
       },
+      ingestion: ingestionResult,
     });
 
   } catch (error) {
