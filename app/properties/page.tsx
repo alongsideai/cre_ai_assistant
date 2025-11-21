@@ -47,8 +47,18 @@ export default async function PropertiesPage() {
                 key={property.id}
                 className="bg-white border border-gray-200 rounded-lg p-6"
               >
-                <h2 className="text-2xl font-semibold mb-2">{property.name}</h2>
-                <p className="text-gray-600 mb-4">{property.address}</p>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold mb-2">{property.name}</h2>
+                    <p className="text-gray-600">{property.address}</p>
+                  </div>
+                  <Link
+                    href={`/properties/${property.id}`}
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    View Details & Q&A
+                  </Link>
+                </div>
 
                 {property.leases.length === 0 ? (
                   <p className="text-gray-500 italic">No leases for this property</p>

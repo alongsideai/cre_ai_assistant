@@ -288,3 +288,133 @@ export async function retrieveRelevantChunks(params: {
     return [];
   }
 }
+
+/**
+ * Retrieved chunk with lease and property context for cross-lease search
+ */
+export interface RetrievedChunkWithLease {
+  leaseId: string;
+  propertyId: string | null;
+  tenantName: string;
+  propertyName: string | null;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+}
+
+/**
+ * Retrieve relevant chunks across multiple leases
+ */
+export async function retrieveRelevantChunksForLeaseIds(params: {
+  leaseIds: string[];
+  query: string;
+  topK?: number;
+  maxChunksPerLease?: number;
+}): Promise<RetrievedChunkWithLease[]> {
+  const { leaseIds, query, topK = 10, maxChunksPerLease = 5 } = params;
+
+  if (leaseIds.length === 0) {
+    return [];
+  }
+
+  try {
+    // Get all chunks for these leases with lease and property info
+    const chunks = await prisma.leaseDocumentChunk.findMany({
+      where: { leaseId: { in: leaseIds } },
+      include: {
+        lease: {
+          include: {
+            property: true,
+          },
+        },
+      },
+    });
+
+    if (chunks.length === 0) {
+      return [];
+    }
+
+    // Generate embedding for the query
+    const queryEmbedding = await embedQuery(query);
+
+    // Compute similarity for each chunk
+    const chunksWithSimilarity = chunks.map((chunk) => {
+      const chunkEmbedding = JSON.parse(chunk.embedding) as number[];
+      const similarity = cosineSimilarity(queryEmbedding, chunkEmbedding);
+
+      return {
+        leaseId: chunk.leaseId,
+        propertyId: chunk.lease.propertyId,
+        tenantName: chunk.lease.tenantName,
+        propertyName: chunk.lease.property?.name || null,
+        chunkIndex: chunk.chunkIndex,
+        content: chunk.content,
+        similarity,
+      };
+    });
+
+    // Group by leaseId and keep top N per lease
+    const groupedByLease = new Map<string, RetrievedChunkWithLease[]>();
+    for (const chunk of chunksWithSimilarity) {
+      const existing = groupedByLease.get(chunk.leaseId) || [];
+      existing.push(chunk);
+      groupedByLease.set(chunk.leaseId, existing);
+    }
+
+    // Sort each group by similarity and limit per lease
+    const limitedChunks: RetrievedChunkWithLease[] = [];
+    for (const [, leaseChunks] of groupedByLease) {
+      leaseChunks.sort((a, b) => b.similarity - a.similarity);
+      limitedChunks.push(...leaseChunks.slice(0, maxChunksPerLease));
+    }
+
+    // Sort all results by similarity and take topK overall
+    limitedChunks.sort((a, b) => b.similarity - a.similarity);
+
+    return limitedChunks.slice(0, topK);
+  } catch (error) {
+    console.error('Error retrieving chunks for multiple leases:', error);
+    return [];
+  }
+}
+
+/**
+ * Retrieve relevant chunks for all leases in a property
+ */
+export async function retrieveRelevantChunksForProperty(params: {
+  propertyId: string;
+  query: string;
+  topK?: number;
+  maxChunksPerLease?: number;
+}): Promise<RetrievedChunkWithLease[]> {
+  const { propertyId, query, topK = 10, maxChunksPerLease = 3 } = params;
+
+  try {
+    // Find all leases for this property that have chunks
+    const leasesWithChunks = await prisma.lease.findMany({
+      where: {
+        propertyId,
+        chunks: {
+          some: {},
+        },
+      },
+      select: { id: true },
+    });
+
+    if (leasesWithChunks.length === 0) {
+      return [];
+    }
+
+    const leaseIds = leasesWithChunks.map((l) => l.id);
+
+    return retrieveRelevantChunksForLeaseIds({
+      leaseIds,
+      query,
+      topK,
+      maxChunksPerLease,
+    });
+  } catch (error) {
+    console.error(`Error retrieving chunks for property ${propertyId}:`, error);
+    return [];
+  }
+}

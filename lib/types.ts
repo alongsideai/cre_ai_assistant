@@ -65,3 +65,20 @@ export interface LeaseQuestionResponse {
     leaseEnd?: string;
   };
 }
+
+export interface PortfolioSourceChunk {
+  leaseId: string;
+  tenantName: string;
+  propertyId: string | null;
+  propertyName: string | null;
+  chunkIndex: number;
+  snippet: string;
+  similarity: number;
+}
+
+export interface PortfolioQuestionResponse {
+  answer: string;
+  mode: 'rag' | 'no_documents';
+  scope: 'portfolio' | 'property';
+  sourceChunks: PortfolioSourceChunk[];
+}

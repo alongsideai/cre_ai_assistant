@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { DashboardSummary, Alert } from '@/lib/types';
+import { DashboardSummary, Alert, PortfolioQuestionResponse, PortfolioSourceChunk } from '@/lib/types';
 import { getSeverityColor } from '@/lib/alerts';
 
 export default function DashboardPage() {
@@ -314,6 +314,9 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Ask the Portfolio */}
+        <PortfolioQA />
       </div>
     </main>
   );
@@ -398,6 +401,123 @@ function AlertItem({ alert }: { alert: Alert }) {
           >
             View Lease →
           </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Portfolio Q&A Component
+function PortfolioQA() {
+  const [question, setQuestion] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [history, setHistory] = useState<Array<{
+    question: string;
+    response: PortfolioQuestionResponse;
+  }>>([]);
+  const [showContext, setShowContext] = useState<number | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim() || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/portfolio/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: question.trim() }),
+      });
+
+      const data: PortfolioQuestionResponse = await response.json();
+      setHistory(prev => [{ question: question.trim(), response: data }, ...prev]);
+      setQuestion('');
+    } catch (error) {
+      console.error('Error asking portfolio question:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6 mt-8">
+      <h2 className="text-xl font-semibold mb-4 text-gray-900">
+        Ask the Portfolio
+      </h2>
+      <p className="text-sm text-gray-600 mb-4">
+        Ask questions across all analyzed lease documents in your portfolio.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mb-6">
+        <div className="flex gap-2">
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="E.g., Which tenants have renewal options in 2026?"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            rows={2}
+            disabled={isLoading}
+          />
+          <button
+            type="submit"
+            disabled={!question.trim() || isLoading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isLoading ? 'Asking...' : 'Ask'}
+          </button>
+        </div>
+      </form>
+
+      {history.length > 0 && (
+        <div className="space-y-4">
+          {history.map((item, idx) => (
+            <div key={idx} className="border border-gray-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-gray-900 mb-2">
+                Q: {item.question}
+              </p>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                  item.response.mode === 'rag'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {item.response.mode === 'rag' ? 'Lease Documents' : 'No Documents'}
+                </span>
+              </div>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                {item.response.answer}
+              </p>
+
+              {item.response.sourceChunks.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowContext(showContext === idx ? null : idx)}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    {showContext === idx ? 'Hide context' : `Show context (${item.response.sourceChunks.length} sources)`}
+                  </button>
+
+                  {showContext === idx && (
+                    <div className="mt-2 space-y-2">
+                      {item.response.sourceChunks.map((chunk, cIdx) => (
+                        <div key={cIdx} className="bg-gray-50 border border-gray-200 rounded p-3 text-xs">
+                          <p className="font-medium text-gray-900">
+                            {chunk.tenantName} - {chunk.propertyName || 'N/A'}
+                          </p>
+                          <p className="text-gray-600 mt-1">
+                            {chunk.snippet}...
+                          </p>
+                          <p className="text-gray-400 mt-1">
+                            Similarity: {(chunk.similarity * 100).toFixed(0)}%
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
