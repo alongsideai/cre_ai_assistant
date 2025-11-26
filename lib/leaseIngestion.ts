@@ -167,11 +167,28 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export async function ingestLeaseDocument(params: {
   leaseId: string;
   filePath: string;
-}): Promise<{ chunksCreated: number; success: boolean; error?: string }> {
-  const { leaseId, filePath } = params;
+  fileName: string;
+  documentId?: string; // Optional: reuse existing document
+}): Promise<{
+  chunksCreated: number;
+  success: boolean;
+  documentId?: string;
+  error?: string;
+}> {
+  const { leaseId, filePath, fileName, documentId: existingDocumentId } = params;
 
   try {
     console.log(`[Ingestion] Starting ingestion for lease ${leaseId}`);
+
+    // Get lease and property info
+    const lease = await prisma.lease.findUnique({
+      where: { id: leaseId },
+      select: { propertyId: true },
+    });
+
+    if (!lease) {
+      throw new Error(`Lease ${leaseId} not found`);
+    }
 
     // Step 1: Extract text from PDF
     console.log(`[Ingestion] Extracting text from ${filePath}`);
@@ -202,30 +219,57 @@ export async function ingestLeaseDocument(params: {
       );
     }
 
-    // Step 4: Delete existing chunks for this lease (idempotent)
-    console.log(`[Ingestion] Deleting existing chunks for lease ${leaseId}`);
-    await prisma.leaseDocumentChunk.deleteMany({
-      where: { leaseId },
+    // Step 4: Find or create Document
+    let documentId = existingDocumentId;
+    if (!documentId) {
+      console.log(`[Ingestion] Creating new Document record`);
+      const document = await prisma.document.create({
+        data: {
+          type: 'LEASE',
+          status: 'PROCESSING',
+          filePath,
+          fileName,
+          mimeType: 'application/pdf',
+          leaseId,
+          propertyId: lease.propertyId,
+          extractedData: JSON.stringify({ text }),
+        },
+      });
+      documentId = document.id;
+    }
+
+    // Step 5: Delete existing chunks for this document (idempotent)
+    console.log(`[Ingestion] Deleting existing chunks for document ${documentId}`);
+    await prisma.documentChunk.deleteMany({
+      where: { documentId },
     });
 
-    // Step 5: Store chunks and embeddings
+    // Step 6: Store chunks and embeddings
     console.log(`[Ingestion] Storing ${chunks.length} chunks in database`);
-    const chunkRecords = chunks.map((content, index) => ({
-      leaseId,
-      chunkIndex: index,
-      content,
-      embedding: JSON.stringify(embeddings[index]),
-    }));
-
-    await prisma.leaseDocumentChunk.createMany({
-      data: chunkRecords,
+    await prisma.documentChunk.createMany({
+      data: chunks.map((content, index) => ({
+        documentId,
+        chunkIndex: index,
+        content,
+        embedding: JSON.stringify(embeddings[index]),
+        metadata: JSON.stringify({ leaseId }),
+      })),
     });
 
-    console.log(`[Ingestion] Successfully ingested ${chunks.length} chunks for lease ${leaseId}`);
+    // Step 7: Update document status to EXTRACTED
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { status: 'EXTRACTED' },
+    });
+
+    console.log(
+      `[Ingestion] Successfully ingested ${chunks.length} chunks for document ${documentId}`
+    );
 
     return {
       chunksCreated: chunks.length,
       success: true,
+      documentId,
     };
   } catch (error) {
     console.error(`[Ingestion] Error ingesting lease ${leaseId}:`, error);
@@ -254,9 +298,14 @@ export async function retrieveRelevantChunks(params: {
   const { leaseId, query, topK = 5 } = params;
 
   try {
-    // Get all chunks for this lease
-    const chunks = await prisma.leaseDocumentChunk.findMany({
-      where: { leaseId },
+    // Get all chunks for this lease using the new Document model
+    const chunks = await prisma.documentChunk.findMany({
+      where: {
+        document: {
+          leaseId,
+          type: { in: ['LEASE', 'AMENDMENT'] },
+        },
+      },
       orderBy: { chunkIndex: 'asc' },
     });
 
@@ -319,12 +368,21 @@ export async function retrieveRelevantChunksForLeaseIds(params: {
 
   try {
     // Get all chunks for these leases with lease and property info
-    const chunks = await prisma.leaseDocumentChunk.findMany({
-      where: { leaseId: { in: leaseIds } },
+    const chunks = await prisma.documentChunk.findMany({
+      where: {
+        document: {
+          leaseId: { in: leaseIds },
+          type: { in: ['LEASE', 'AMENDMENT'] },
+        },
+      },
       include: {
-        lease: {
+        document: {
           include: {
-            property: true,
+            lease: {
+              include: {
+                property: true,
+              },
+            },
           },
         },
       },
@@ -343,10 +401,10 @@ export async function retrieveRelevantChunksForLeaseIds(params: {
       const similarity = cosineSimilarity(queryEmbedding, chunkEmbedding);
 
       return {
-        leaseId: chunk.leaseId,
-        propertyId: chunk.lease.propertyId,
-        tenantName: chunk.lease.tenantName,
-        propertyName: chunk.lease.property?.name || null,
+        leaseId: chunk.document.leaseId!,
+        propertyId: chunk.document.lease!.propertyId,
+        tenantName: chunk.document.lease!.tenantName,
+        propertyName: chunk.document.lease!.property?.name || null,
         chunkIndex: chunk.chunkIndex,
         content: chunk.content,
         similarity,
@@ -390,12 +448,16 @@ export async function retrieveRelevantChunksForProperty(params: {
   const { propertyId, query, topK = 10, maxChunksPerLease = 3 } = params;
 
   try {
-    // Find all leases for this property that have chunks
+    // Find all leases for this property that have documents with chunks
     const leasesWithChunks = await prisma.lease.findMany({
       where: {
         propertyId,
-        chunks: {
-          some: {},
+        documents: {
+          some: {
+            chunks: {
+              some: {},
+            },
+          },
         },
       },
       select: { id: true },

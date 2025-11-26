@@ -1,46 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-
-// Consolidated Dashboard Data Structure
-interface DashboardData {
-  totals: {
-    totalRent: number;
-    totalSqft: number;
-    leases: number;
-    properties: number;
-  };
-  expirations: Array<{
-    leaseId: string;
-    tenant: string | null;
-    property: string | null;
-    endDate: string;
-  }>;
-  criticalDates: Array<{
-    leaseId: string;
-    tenant: string | null;
-    property: string | null;
-    date: string;
-    type: string;
-    description: string | null;
-  }>;
-  rentsByYear: Array<{
-    year: number;
-    totalRent: number;
-  }>;
-  documentHealth: Array<{
-    leaseId: string;
-    tenant: string | null;
-    hasLease: boolean;
-    hasCOI: boolean;
-    missingAmendments: boolean;
-    status: 'HEALTHY' | 'NEEDS_REVIEW' | 'AT_RISK';
-  }>;
-  insights: Array<any>; // Placeholder for LLM-generated insights
-}
+import { generateDashboardInsights } from '@/lib/generateDashboardInsights';
 
 export async function GET() {
   try {
-    // Efficient parallel queries with minimal fields
+    // Fetch dashboard data (reusing same logic as dashboard-summary)
     const [leases, properties] = await Promise.all([
       prisma.lease.findMany({
         select: {
@@ -84,7 +48,7 @@ export async function GET() {
       properties,
     };
 
-    // Build expirations array (leases with end dates, sorted by date)
+    // Build expirations array
     const expirations = leases
       .filter((lease) => lease.leaseEnd)
       .map((lease) => ({
@@ -96,7 +60,14 @@ export async function GET() {
       .sort((a, b) => new Date(a.endDate).getTime() - new Date(b.endDate).getTime());
 
     // Extract critical dates from document extractedData
-    const criticalDates: DashboardData['criticalDates'] = [];
+    const criticalDates: Array<{
+      leaseId: string;
+      tenant: string | null;
+      property: string | null;
+      date: string;
+      type: string;
+      description: string | null;
+    }> = [];
 
     for (const lease of leases) {
       // Add lease expiration as a critical date if available
@@ -135,36 +106,16 @@ export async function GET() {
       }
     }
 
-    // Sort critical dates by date
-    criticalDates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    // Calculate rentsByYear (monthly rent * 12, aggregated by lease end year)
-    const rentByYearMap = new Map<number, number>();
-
-    for (const lease of leases) {
-      if (lease.leaseEnd && lease.baseRent) {
-        const year = new Date(lease.leaseEnd).getFullYear();
-        const annualRent = lease.baseRent * 12;
-        rentByYearMap.set(year, (rentByYearMap.get(year) || 0) + annualRent);
-      }
-    }
-
-    const rentsByYear = Array.from(rentByYearMap.entries())
-      .map(([year, totalRent]) => ({ year, totalRent }))
-      .sort((a, b) => a.year - b.year);
-
     // Calculate document health for each lease
-    const documentHealth: DashboardData['documentHealth'] = leases.map((lease) => {
+    const documentHealth = leases.map((lease) => {
       const hasLease = lease.documents.some(
         (doc) => doc.type === 'LEASE' && doc.status === 'EXTRACTED'
       );
       const hasCOI = lease.documents.some((doc) => doc.type === 'COI');
       const hasAmendment = lease.documents.some((doc) => doc.type === 'AMENDMENT');
 
-      // Determine if amendments are missing (simple heuristic: if lease exists but no amendments)
       const missingAmendments = hasLease && !hasAmendment;
 
-      // Determine overall status
       let status: 'HEALTHY' | 'NEEDS_REVIEW' | 'AT_RISK';
       if (!hasLease) {
         status = 'AT_RISK';
@@ -184,29 +135,26 @@ export async function GET() {
       };
     });
 
-    // Placeholder for AI insights (to be implemented later)
-    const insights: any[] = [];
-
-    const dashboardData: DashboardData = {
+    // Generate insights using LLM
+    const insights = await generateDashboardInsights({
       totals,
       expirations,
       criticalDates,
-      rentsByYear,
       documentHealth,
-      insights,
-    };
+    });
 
     return NextResponse.json({
       success: true,
-      data: dashboardData,
+      insights,
     });
   } catch (error) {
-    console.error('Error fetching dashboard summary:', error);
+    console.error('Error generating dashboard insights:', error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to fetch dashboard summary',
+        error: 'Failed to generate insights',
         details: error instanceof Error ? error.message : 'Unknown error',
+        insights: [], // Return empty array on error
       },
       { status: 500 }
     );

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
-import pdf from 'pdf-parse';
 import { prisma } from '@/lib/prisma';
 import { ingestLeaseDocument } from '@/lib/leaseIngestion';
+import { storeLeaseFile } from '@/lib/fileStorage';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,48 +28,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'uploads', 'leases');
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-
-    // Generate unique filename
-    const timestamp = Date.now();
-    const filename = `${leaseId}-${timestamp}.pdf`;
-    const filepath = join(uploadsDir, filename);
-
-    // Save the file
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filepath, buffer);
-
-    // Extract text from PDF
-    let extractedText = '';
-    try {
-      const pdfData = await pdf(buffer);
-      extractedText = pdfData.text;
-    } catch (pdfError) {
-      console.error('Error extracting PDF text:', pdfError);
-      extractedText = 'Error extracting text from PDF';
-    }
-
-    // Create LeaseDocument record
-    const leaseDocument = await prisma.leaseDocument.create({
-      data: {
-        leaseId,
-        filePath: filepath,
-        extractedText,
-      },
-    });
+    // Store the file using shared helper
+    const { filePath: filepath, fileName: filename } = await storeLeaseFile(
+      file,
+      leaseId
+    );
 
     // Trigger document ingestion (chunking + embedding)
-    let ingestionResult = null;
+    // This will create the Document record and process chunks
+    let ingestionResult;
     try {
       console.log(`Starting ingestion for lease ${leaseId}`);
       ingestionResult = await ingestLeaseDocument({
         leaseId,
         filePath: filepath,
+        fileName: filename,
       });
       console.log(
         `Ingestion completed for lease ${leaseId}: ${ingestionResult.chunksCreated} chunks created`
@@ -91,9 +61,9 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Lease PDF uploaded successfully',
       document: {
-        id: leaseDocument.id,
+        id: ingestionResult.documentId || null,
         filename,
-        textLength: extractedText.length,
+        chunksCreated: ingestionResult.chunksCreated,
       },
       ingestion: ingestionResult,
     });

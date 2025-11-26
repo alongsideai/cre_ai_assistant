@@ -32,7 +32,15 @@ export async function POST(request: NextRequest) {
 
     // Get the lease document text (if available)
     const leaseDocument = lease.documents[0];
-    const leaseText = leaseDocument?.extractedText || '';
+    let leaseText = '';
+    if (leaseDocument?.extractedData) {
+      try {
+        const parsed = JSON.parse(leaseDocument.extractedData);
+        leaseText = parsed.text || '';
+      } catch (error) {
+        console.error('Error parsing extractedData:', error);
+      }
+    }
 
     // Truncate lease text if too long (keep first 10000 chars for now)
     const truncatedText = leaseText.length > 10000

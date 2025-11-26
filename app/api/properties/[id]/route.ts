@@ -19,9 +19,13 @@ export async function GET(
     const leases = await prisma.lease.findMany({
       where: { propertyId },
       include: {
-        chunks: {
-          select: { id: true },
-          take: 1,
+        documents: {
+          include: {
+            chunks: {
+              select: { id: true },
+              take: 1,
+            },
+          },
         },
       },
       orderBy: { tenantName: 'asc' },
@@ -35,7 +39,7 @@ export async function GET(
       baseRent: lease.baseRent,
       leaseStart: lease.leaseStart?.toISOString().split('T')[0] || null,
       leaseEnd: lease.leaseEnd?.toISOString().split('T')[0] || null,
-      hasChunks: lease.chunks.length > 0,
+      hasChunks: lease.documents.some((doc) => doc.chunks.length > 0),
     }));
 
     return NextResponse.json({

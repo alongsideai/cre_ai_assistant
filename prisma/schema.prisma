@@ -18,6 +18,7 @@ model Property {
   updatedAt DateTime @updatedAt
 
   leases    Lease[]
+  documents Document[]
 
   @@index([name])
 }
@@ -35,36 +36,51 @@ model Lease {
   updatedAt   DateTime  @updatedAt
 
   property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  documents   LeaseDocument[]
-  chunks      LeaseDocumentChunk[]
+  documents   Document[]
 
   @@index([propertyId])
   @@index([tenantName])
 }
 
-model LeaseDocument {
-  id            String   @id @default(cuid())
-  leaseId       String
-  filePath      String
-  extractedText String   @default("")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// New unified document models
+// Note: Using String for enums and Json fields because SQLite doesn't support them natively
 
-  lease         Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+model Document {
+  id         String   @id @default(cuid())
+  type       String   // LEASE | AMENDMENT | COI | INVOICE | EMAIL | WORK_ORDER | ABSTRACT | RENT_ROLL | OTHER
+  status     String   @default("UPLOADED") // UPLOADED | PROCESSING | EXTRACTED | FAILED
 
+  filePath   String
+  fileName   String
+  mimeType   String?
+  uploadedAt DateTime @default(now())
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id])
+
+  leaseId    String?
+  lease      Lease?    @relation(fields: [leaseId], references: [id])
+
+  extractedData String? // JSON string
+
+  chunks     DocumentChunk[]
+
+  @@index([type])
+  @@index([status])
   @@index([leaseId])
+  @@index([propertyId])
 }
 
-model LeaseDocumentChunk {
+model DocumentChunk {
   id         String   @id @default(cuid())
-  leaseId    String
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
   chunkIndex Int
   content    String
-  embedding  String   @default("[]") // JSON array of floats
-  createdAt  DateTime @default(now())
+  embedding  String   // JSON string array of floats
+  metadata   String?  // JSON string
 
-  lease      Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
-
-  @@index([leaseId])
-  @@index([leaseId, chunkIndex])
+  @@index([documentId])
+  @@index([documentId, chunkIndex])
 }

@@ -16,11 +16,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find all leases that have chunks (analyzed documents)
+    // Find all leases that have documents with chunks (analyzed documents)
     const leasesWithChunks = await prisma.lease.findMany({
       where: {
-        chunks: {
-          some: {},
+        documents: {
+          some: {
+            chunks: {
+              some: {},
+            },
+          },
         },
       },
       select: { id: true },

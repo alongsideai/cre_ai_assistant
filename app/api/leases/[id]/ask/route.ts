@@ -25,12 +25,13 @@ export async function POST(
       where: { id: leaseId },
       include: {
         property: true,
-        documents: true,
-        chunks: {
-          select: {
-            id: true,
+        documents: {
+          include: {
+            chunks: {
+              select: { id: true },
+              take: 1,
+            },
           },
-          take: 1,
         },
       },
     });
@@ -42,8 +43,8 @@ export async function POST(
     // Format lease metadata
     const metadata = {
       tenantName: lease.tenantName,
-      propertyName: lease.property.name,
-      address: lease.property.address,
+      propertyName: lease.property?.name || 'N/A',
+      address: lease.property?.address || 'N/A',
       suite: lease.suite || undefined,
       squareFeet: lease.squareFeet || undefined,
       baseRent: lease.baseRent || undefined,
@@ -51,7 +52,7 @@ export async function POST(
       leaseEnd: lease.leaseEnd?.toISOString().split('T')[0],
     };
 
-    const hasChunks = lease.chunks.length > 0;
+    const hasChunks = lease.documents.some((doc) => doc.chunks.length > 0);
 
     // Determine mode: RAG or metadata-only
     let mode: 'rag' | 'metadata_only' = 'metadata_only';

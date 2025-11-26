@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "ts-node --compiler-options {\\\"module\\\":\\\"CommonJS\\\"} prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "migrate:docs": "ts-node --compiler-options {\\\"module\\\":\\\"CommonJS\\\"} scripts/migrateLeaseDocumentsToDocuments.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
