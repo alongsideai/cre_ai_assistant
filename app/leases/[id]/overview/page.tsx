@@ -90,7 +90,11 @@ export default async function LeaseOverviewPage({ params }: PageProps) {
               </div>
             )}
           </div>
-          <LeaseOverviewActions leaseId={lease.id} documentCount={documentCount} />
+          <LeaseOverviewActions
+            leaseId={lease.id}
+            documentCount={documentCount}
+            tenantName={lease.tenantName}
+          />
         </div>
 
         {/* Basic Information */}

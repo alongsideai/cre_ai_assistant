@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import DocumentActions from '@/components/documents/DocumentActions';
+import InvoiceSummary from '@/components/documents/InvoiceSummary';
+import WorkOrderSummary from '@/components/documents/WorkOrderSummary';
 
 interface PageProps {
   params: {
@@ -44,10 +46,16 @@ export default async function DocumentDetailPage({ params }: PageProps) {
 
   // Parse extractedData if it exists
   let extractedData: string | null = null;
+  let invoiceData: any = null;
+  let workOrderData: any = null;
   if (document.extractedData) {
     try {
       const parsed = JSON.parse(document.extractedData);
       extractedData = JSON.stringify(parsed, null, 2);
+      // Extract invoice data if present
+      invoiceData = parsed.invoice;
+      // Extract work order data if present
+      workOrderData = parsed.workOrder;
     } catch (error) {
       console.error('Error parsing extractedData:', error);
       extractedData = document.extractedData;
@@ -176,6 +184,16 @@ export default async function DocumentDetailPage({ params }: PageProps) {
             </div>
           </div>
         </div>
+
+        {/* Invoice Summary - Human-Readable View */}
+        {document.type === 'INVOICE' && invoiceData && (
+          <InvoiceSummary invoice={invoiceData} />
+        )}
+
+        {/* Work Order Summary - Human-Readable View */}
+        {document.type === 'WORK_ORDER' && workOrderData && (
+          <WorkOrderSummary workOrder={workOrderData} />
+        )}
 
         {/* Extracted Data */}
         {extractedData && (

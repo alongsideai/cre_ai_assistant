@@ -12,6 +12,8 @@ export default function DocumentActions({ documentId, type }: DocumentActionsPro
   const router = useRouter();
   const [classifyLoading, setClassifyLoading] = useState(false);
   const [extractLoading, setExtractLoading] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [workOrderLoading, setWorkOrderLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
@@ -94,6 +96,76 @@ export default function DocumentActions({ documentId, type }: DocumentActionsPro
     }
   };
 
+  const handleExtractInvoice = async () => {
+    setInvoiceLoading(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}/extract-invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage({
+          type: 'success',
+          text: 'Invoice data extracted successfully!',
+        });
+        // Refresh page to show extracted data
+        router.refresh();
+      } else {
+        setMessage({
+          type: 'error',
+          text: data.error || 'Failed to extract invoice',
+        });
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: 'Network error occurred',
+      });
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
+  const handleExtractWorkOrder = async () => {
+    setWorkOrderLoading(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}/extract-work-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage({
+          type: 'success',
+          text: 'Work order data extracted successfully!',
+        });
+        // Refresh page to show extracted data
+        router.refresh();
+      } else {
+        setMessage({
+          type: 'error',
+          text: data.error || 'Failed to extract work order',
+        });
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: 'Network error occurred',
+      });
+    } finally {
+      setWorkOrderLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
       <h2 className="text-xl font-semibold mb-4">Document Actions</h2>
@@ -162,9 +234,9 @@ export default function DocumentActions({ documentId, type }: DocumentActionsPro
         </div>
       </div>
 
-      {/* Extraction Section (only for LEASE type) */}
+      {/* Extraction Section (for LEASE type) */}
       {type === 'LEASE' && (
-        <div>
+        <div className="mb-6">
           <h3 className="text-sm font-medium text-gray-700 mb-2">Lease Data Extraction</h3>
           <p className="text-sm text-gray-600 mb-3">
             Extract structured data from this lease document (tenant name, dates, rent, etc.)
@@ -179,9 +251,43 @@ export default function DocumentActions({ documentId, type }: DocumentActionsPro
         </div>
       )}
 
-      {type !== 'LEASE' && (
+      {/* Invoice Extraction Section (for INVOICE type) */}
+      {type === 'INVOICE' && (
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Invoice Data Extraction</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Extract structured data from this invoice (vendor, amounts, line items, etc.)
+          </p>
+          <button
+            onClick={handleExtractInvoice}
+            disabled={invoiceLoading}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {invoiceLoading ? 'Extracting...' : 'Extract Invoice Data'}
+          </button>
+        </div>
+      )}
+
+      {/* Work Order Extraction Section (for WORK_ORDER type) */}
+      {type === 'WORK_ORDER' && (
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Work Order Data Extraction</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Extract structured data from this work order (issue type, priority, risks, next steps, etc.)
+          </p>
+          <button
+            onClick={handleExtractWorkOrder}
+            disabled={workOrderLoading}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {workOrderLoading ? 'Extracting...' : 'Extract Work Order Data'}
+          </button>
+        </div>
+      )}
+
+      {type !== 'LEASE' && type !== 'INVOICE' && type !== 'WORK_ORDER' && (
         <div className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded p-3">
-          Lease data extraction is only available for documents classified as LEASE.
+          Data extraction is available for documents classified as LEASE, INVOICE, or WORK_ORDER.
           {type === 'OTHER' && ' Try auto-classifying this document first.'}
         </div>
       )}
