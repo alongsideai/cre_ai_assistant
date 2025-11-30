@@ -142,13 +142,32 @@ export async function POST(request: Request) {
 
             if (document.type === 'WORK_ORDER' && extractedData.workOrder) {
               const wo = extractedData.workOrder;
+
+              // Fill tenant/property if available from work order
+              if (!input.tenantName && wo.tenantName) {
+                input.tenantName = wo.tenantName;
+              }
+              if (!input.propertyName && wo.propertyName) {
+                input.propertyName = wo.propertyName;
+              }
+
               const parts: string[] = [];
               if (wo.issueType) parts.push(`Issue: ${wo.issueType}`);
               if (wo.priority) parts.push(`Priority: ${wo.priority}`);
-              if (wo.summary) parts.push(wo.summary);
-              if (wo.affectedArea) parts.push(`Location: ${wo.affectedArea}`);
+              if (wo.affectedArea) parts.push(`Affected area: ${wo.affectedArea}`);
+              if (wo.summary) parts.push(`Summary: ${wo.summary}`);
 
-              input.workOrderSummary = parts.join(' | ');
+              // Add detected risks
+              if (Array.isArray(wo.detectedRisk) && wo.detectedRisk.length > 0) {
+                parts.push(`Risks: ${wo.detectedRisk.join(', ')}`);
+              }
+
+              // Add suggested next steps
+              if (Array.isArray(wo.suggestedNextSteps) && wo.suggestedNextSteps.length > 0) {
+                parts.push(`Suggested next steps: ${wo.suggestedNextSteps.join('; ')}`);
+              }
+
+              input.workOrderSummary = parts.filter(Boolean).join(' | ');
             }
 
             if (document.type === 'INVOICE' && extractedData.invoice) {

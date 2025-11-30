@@ -133,22 +133,16 @@ export default function DashboardPage() {
           </div>
           <div className="space-x-2">
             <Link
+              href="/documents"
+              className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors font-semibold"
+            >
+              Upload Documents
+            </Link>
+            <Link
               href="/properties"
               className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
             >
               Properties
-            </Link>
-            <Link
-              href="/documents"
-              className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
-            >
-              Documents
-            </Link>
-            <Link
-              href="/"
-              className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
-            >
-              Home
             </Link>
           </div>
         </div>

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import DocumentTable from '@/components/documents/DocumentTable';
 import DocumentFilters from '@/components/documents/DocumentFilters';
+import DocumentUpload from '@/components/documents/DocumentUpload';
 
 interface SearchParams {
   type?: string;
@@ -109,6 +110,9 @@ export default async function DocumentsPage({ searchParams }: PageProps) {
             </Link>
           </div>
         </div>
+
+        {/* Upload Section */}
+        <DocumentUpload />
 
         {/* Filters */}
         <DocumentFilters />

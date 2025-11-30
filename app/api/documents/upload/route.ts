@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { storeUploadedFile } from '@/lib/fileStorage';
+import { ingestDocument } from '@/lib/documentIngestion';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,18 +29,30 @@ export async function POST(request: NextRequest) {
       const document = await prisma.document.create({
         data: {
           type: 'OTHER',
-          status: 'UPLOADED',
+          status: 'PROCESSING',
           filePath,
           fileName,
           mimeType,
         },
       });
 
+      console.log("[/api/documents/upload] Created document", document.id);
+
+      // Ingest document: extract text, chunk, and embed
+      await ingestDocument(document.id);
+
+      // Fetch updated document status
+      const updatedDocument = await prisma.document.findUnique({
+        where: { id: document.id },
+        select: { status: true, _count: { select: { chunks: true } } },
+      });
+
       uploadedDocuments.push({
         id: document.id,
         fileName: document.fileName,
         type: document.type,
-        status: document.status,
+        status: updatedDocument?.status || document.status,
+        chunksCreated: updatedDocument?._count?.chunks || 0,
       });
     }
 

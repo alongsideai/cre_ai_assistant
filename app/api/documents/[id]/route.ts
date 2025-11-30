@@ -98,3 +98,59 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    // Check if document exists
+    const document = await prisma.document.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        fileName: true,
+        leaseId: true,
+        propertyId: true,
+      },
+    });
+
+    if (!document) {
+      return NextResponse.json(
+        { error: 'Document not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete document chunks first (due to foreign key constraint)
+    await prisma.documentChunk.deleteMany({
+      where: { documentId: id },
+    });
+
+    // Delete the document
+    await prisma.document.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Document deleted successfully',
+      deletedDocument: {
+        id: document.id,
+        fileName: document.fileName,
+      },
+    });
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to delete document',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
