@@ -36,9 +36,10 @@ model Lease {
   tenantName  String
   suite       String?
   squareFeet  Int?
-  baseRent    Float?
+  baseRent    Float?    // Monthly base rent
   leaseStart  DateTime?
   leaseEnd    DateTime?
+  status      String    @default("ACTIVE") // ACTIVE, EXPIRED, FUTURE, NOTICE_GIVEN
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -47,6 +48,21 @@ model Lease {
 
   @@index([propertyId])
   @@index([tenantName])
+  @@index([status])
+  @@index([leaseEnd])
+}
+
+model MonthlyNOISnapshot {
+  id        String   @id @default(cuid())
+  month     DateTime // First day of month
+  portfolio String   @default("DEFAULT")
+  noi       Float
+  revenue   Float?
+  expenses  Float?
+  createdAt DateTime @default(now())
+
+  @@index([portfolio])
+  @@index([month])
 }
 
 // New unified document models
