@@ -11,6 +11,26 @@ interface KPIs {
   latestNOI: number | null;
 }
 
+interface PortfolioHealth {
+  occupancyPct: number | null;
+  totalSpaces: number;
+  leasedSpaces: number;
+  waltYears: number | null;
+  rolloverCount12Mo: number;
+  rolloverRent12Mo: number;
+  noiChange3MoAbs: number | null;
+  noiChange3MoPct: number | null;
+}
+
+interface TopProperty {
+  id: string;
+  name: string;
+  occupancyPct: number | null;
+  activeLeasesCount: number;
+  monthlyRentTotal: number;
+  expiring12MoCount: number;
+}
+
 interface UpcomingExpiry {
   id: string;
   tenantName: string;
@@ -35,6 +55,8 @@ interface NOISnapshot {
 
 interface OwnerDashboardData {
   kpis: KPIs;
+  portfolioHealth: PortfolioHealth;
+  topProperties: TopProperty[];
   upcomingExpiries: UpcomingExpiry[];
   noiTrend: NOISnapshot[];
 }
@@ -48,6 +70,18 @@ function formatCurrency(value: number | null): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+// Format currency with sign
+function formatCurrencyWithSign(value: number | null): string {
+  if (value === null) return '—';
+  const formatted = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.abs(value));
+  return value >= 0 ? `+${formatted}` : `-${formatted}`;
 }
 
 // Format month from ISO date
@@ -136,7 +170,7 @@ export default function OwnerDashboard() {
     );
   }
 
-  const { kpis, upcomingExpiries, noiTrend } = data;
+  const { kpis, portfolioHealth, topProperties, upcomingExpiries, noiTrend } = data;
 
   return (
     <div className="p-8">
@@ -182,6 +216,74 @@ export default function OwnerDashboard() {
             isText
           />
         </div>
+
+        {/* Portfolio Health Section */}
+        <section className="mb-8">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Portfolio Health</h2>
+            <p className="text-sm text-gray-600">
+              High-level view of occupancy, lease term, rollover exposure, and income trend
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <HealthCard
+              label="OCCUPANCY"
+              value={portfolioHealth.occupancyPct !== null
+                ? `${portfolioHealth.occupancyPct.toFixed(1)}%`
+                : '—'}
+              subtext={`${portfolioHealth.leasedSpaces} of ${portfolioHealth.totalSpaces} spaces leased`}
+              colorClass="bg-emerald-50 border-emerald-200"
+              valueColor="text-emerald-900"
+            />
+            <HealthCard
+              label="WALT"
+              value={portfolioHealth.waltYears !== null
+                ? `${portfolioHealth.waltYears.toFixed(1)} years`
+                : '—'}
+              subtext="Weighted by monthly base rent"
+              colorClass="bg-sky-50 border-sky-200"
+              valueColor="text-sky-900"
+            />
+            <HealthCard
+              label="ROLLOVER (12 MO)"
+              value={`${portfolioHealth.rolloverCount12Mo} leases`}
+              subtext={`${formatCurrency(portfolioHealth.rolloverRent12Mo)} monthly rent at risk`}
+              colorClass="bg-amber-50 border-amber-200"
+              valueColor="text-amber-900"
+              highlight={portfolioHealth.rolloverCount12Mo > 3}
+            />
+            <HealthCard
+              label="NOI TREND (3 MO)"
+              value={portfolioHealth.noiChange3MoAbs !== null
+                ? formatCurrencyWithSign(portfolioHealth.noiChange3MoAbs)
+                : '—'}
+              subtext={portfolioHealth.noiChange3MoPct !== null
+                ? `${portfolioHealth.noiChange3MoPct >= 0 ? '+' : ''}${portfolioHealth.noiChange3MoPct.toFixed(1)}% change over 3 months`
+                : 'Change over last 3 months'}
+              colorClass={portfolioHealth.noiChange3MoAbs !== null
+                ? portfolioHealth.noiChange3MoAbs >= 0
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-red-50 border-red-200'
+                : 'bg-gray-50 border-gray-200'}
+              valueColor={portfolioHealth.noiChange3MoAbs !== null
+                ? portfolioHealth.noiChange3MoAbs >= 0
+                  ? 'text-green-900'
+                  : 'text-red-900'
+                : 'text-gray-900'}
+              icon={portfolioHealth.noiChange3MoAbs !== null ? (
+                portfolioHealth.noiChange3MoAbs >= 0 ? (
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                )
+              ) : null}
+            />
+          </div>
+        </section>
 
         {/* Module Navigation Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -267,14 +369,24 @@ export default function OwnerDashboard() {
                         key={lease.id}
                         className="border-b border-gray-100 hover:bg-gray-50"
                       >
-                        <td className="py-3 px-3 font-medium text-gray-900">
-                          {lease.property.name}
+                        <td className="py-3 px-3 font-medium">
+                          <Link
+                            href={`/properties/${lease.property.id}`}
+                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {lease.property.name}
+                          </Link>
                         </td>
                         <td className="py-3 px-3 text-gray-600">
                           {lease.suite || '—'}
                         </td>
-                        <td className="py-3 px-3 text-gray-900">
-                          {lease.tenantName}
+                        <td className="py-3 px-3">
+                          <Link
+                            href={`/tenants/${encodeURIComponent(lease.tenantName)}`}
+                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {lease.tenantName}
+                          </Link>
                         </td>
                         <td className="py-3 px-3 text-right text-gray-900">
                           {formatCurrency(lease.baseRent)}
@@ -289,15 +401,23 @@ export default function OwnerDashboard() {
                           </span>
                         </td>
                         <td className="py-3 px-3 text-gray-600">
-                          <div className="flex flex-col">
-                            <span>{formatDate(lease.leaseEnd)}</span>
-                            {lease.monthsToExpiry !== null && (
-                              <span className={`text-xs ${lease.monthsToExpiry <= 3 ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
-                                {lease.monthsToExpiry <= 1
-                                  ? 'This month'
-                                  : `${lease.monthsToExpiry} months`}
-                              </span>
-                            )}
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span>{formatDate(lease.leaseEnd)}</span>
+                              {lease.monthsToExpiry !== null && (
+                                <span className={`text-xs ${lease.monthsToExpiry <= 3 ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                                  {lease.monthsToExpiry <= 1
+                                    ? 'This month'
+                                    : `${lease.monthsToExpiry} months`}
+                                </span>
+                              )}
+                            </div>
+                            <Link
+                              href={`/leases/${lease.id}`}
+                              className="ml-2 inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded hover:bg-gray-200 transition-colors"
+                            >
+                              View
+                            </Link>
                           </div>
                         </td>
                       </tr>
@@ -307,6 +427,25 @@ export default function OwnerDashboard() {
               </div>
             )}
           </div>
+        </section>
+
+        {/* Property Performance Section */}
+        <section className="mb-8">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Property Performance</h2>
+            <p className="text-sm text-gray-600">
+              Top properties by rent exposure and upcoming rollover
+            </p>
+          </div>
+          {topProperties.length === 0 ? (
+            <p className="text-gray-500 text-sm">No property data available.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {topProperties.map((property) => (
+                <PropertyCard key={property.id} property={property} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* NOI Trend */}
@@ -437,6 +576,42 @@ function KPICard({
   );
 }
 
+// Health Card Component (smaller variant for Portfolio Health section)
+function HealthCard({
+  label,
+  value,
+  subtext,
+  colorClass,
+  valueColor,
+  highlight = false,
+  icon,
+}: {
+  label: string;
+  value: string;
+  subtext: string;
+  colorClass: string;
+  valueColor: string;
+  highlight?: boolean;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`border rounded-xl p-4 ${colorClass} ${
+        highlight ? 'ring-2 ring-offset-2 ring-amber-400' : ''
+      }`}
+    >
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        {label}
+      </p>
+      <div className="flex items-center gap-2">
+        {icon}
+        <p className={`text-2xl font-bold ${valueColor}`}>{value}</p>
+      </div>
+      <p className="text-xs text-gray-600 mt-1">{subtext}</p>
+    </div>
+  );
+}
+
 // Module Card Component
 function ModuleCard({
   title,
@@ -482,6 +657,62 @@ function ModuleCard({
             />
           </svg>
         </Link>
+      </div>
+    </div>
+  );
+}
+
+// Property Card Component
+function PropertyCard({ property }: { property: TopProperty }) {
+  // Format currency for display
+  const formatPropertyCurrency = (value: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5">
+      <h3 className="text-base font-semibold mb-3">
+        <Link
+          href={`/properties/${property.id}`}
+          className="text-gray-900 hover:text-blue-600 transition-colors"
+        >
+          {property.name}
+        </Link>
+      </h3>
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">Occupancy</span>
+          <span className="text-sm font-medium text-gray-900">
+            {property.occupancyPct !== null
+              ? `${property.occupancyPct.toFixed(1)}%`
+              : '—'}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">Monthly rent</span>
+          <span className="text-sm font-medium text-gray-900">
+            {formatPropertyCurrency(property.monthlyRentTotal)}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">Active leases</span>
+          <span className="text-sm font-medium text-gray-900">
+            {property.activeLeasesCount}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">Expiring in 12 mo</span>
+          <span className={`text-sm font-medium ${
+            property.expiring12MoCount > 0 ? 'text-orange-600' : 'text-gray-900'
+          }`}>
+            {property.expiring12MoCount} leases
+          </span>
+        </div>
       </div>
     </div>
   );

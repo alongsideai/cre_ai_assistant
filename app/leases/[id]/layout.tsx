@@ -29,29 +29,31 @@ export default async function LeaseLayout({ children, params }: LayoutProps) {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{lease.tenantName}</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              <Link
+                href={`/tenants/${encodeURIComponent(lease.tenantName)}`}
+                className="hover:text-blue-600 transition-colors"
+              >
+                {lease.tenantName}
+              </Link>
+            </h1>
             <p className="text-gray-600 mt-1">
-              {lease.property.name} • {lease.suite || 'No suite'}
+              <Link
+                href={`/properties/${lease.property.id}`}
+                className="hover:text-blue-600 hover:underline transition-colors"
+              >
+                {lease.property.name}
+              </Link>
+              {' • '}
+              {lease.suite || 'No suite'}
             </p>
           </div>
           <div className="space-x-2">
             <Link
-              href="/properties"
-              className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
-            >
-              Properties
-            </Link>
-            <Link
               href="/dashboard"
-              className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+              className="inline-block bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
             >
-              Dashboard
-            </Link>
-            <Link
-              href="/"
-              className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
-            >
-              Home
+              Back to Dashboard
             </Link>
           </div>
         </div>

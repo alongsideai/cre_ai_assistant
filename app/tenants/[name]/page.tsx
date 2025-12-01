@@ -4,51 +4,33 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
+interface Tenant {
+  name: string;
+}
+
+interface Metrics {
+  activeLeasesCount: number;
+  monthlyRentTotal: number;
+  avgRemainingTermYears: number | null;
+  totalLeasesCount: number;
+  propertiesCount: number;
+}
+
 interface Property {
   id: string;
   name: string;
   address: string;
-  type: string | null;
-  timeZone: string;
-  ownerEntity: string | null;
-  assetManager: string | null;
-  notes: string | null;
-}
-
-interface Metrics {
-  totalSpaces: number;
-  activeLeasesCount: number;
-  occupancyPct: number | null;
-  monthlyRentTotal: number;
-  expiring12MoCount: number;
-}
-
-interface Space {
-  id: string;
-  spaceLabel: string;
-  floor: string | null;
-  areaSqft: number | null;
-  useType: string | null;
-  currentTenant: string | null;
-  currentLeaseId: string | null;
-  currentLeaseStatus: string | null;
-  occupiers: Array<{
-    id: string;
-    legalName: string;
-    brandName: string | null;
-  }>;
 }
 
 interface Lease {
   id: string;
-  tenantName: string;
   suite: string | null;
   squareFeet: number | null;
   baseRent: number | null;
   status: string;
   leaseStart: string | null;
   leaseEnd: string | null;
-  hasChunks: boolean;
+  property: Property;
 }
 
 // Format currency
@@ -88,32 +70,32 @@ function getStatusBadgeClass(status: string): string {
   }
 }
 
-export default function PropertyDetailPage() {
+export default function TenantDetailPage() {
   const params = useParams();
-  const propertyId = params.id as string;
+  const tenantName = decodeURIComponent(params.name as string);
 
-  const [property, setProperty] = useState<Property | null>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const [spaces, setSpaces] = useState<Space[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPropertyData();
-  }, [propertyId]);
+    fetchTenantData();
+  }, [tenantName]);
 
-  const fetchPropertyData = async () => {
+  const fetchTenantData = async () => {
     try {
-      const response = await fetch(`/api/properties/${propertyId}`);
+      const response = await fetch(`/api/tenants/${encodeURIComponent(tenantName)}`);
       if (!response.ok) {
-        throw new Error('Property not found');
+        throw new Error('Tenant not found');
       }
       const data = await response.json();
-      setProperty(data.property);
+      setTenant(data.tenant);
       setMetrics(data.metrics);
-      setSpaces(data.spaces || []);
       setLeases(data.leases);
+      setProperties(data.properties || []);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -127,19 +109,19 @@ export default function PropertyDetailPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading property...</p>
+            <p className="text-gray-600">Loading tenant...</p>
           </div>
         </div>
       </main>
     );
   }
 
-  if (error || !property) {
+  if (error || !tenant) {
     return (
       <main className="min-h-screen p-8 bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-6">
-            <p className="font-semibold">Error loading property</p>
+            <p className="font-semibold">Error loading tenant</p>
             <p className="text-sm mt-1">{error || 'Unknown error'}</p>
           </div>
           <Link
@@ -153,19 +135,22 @@ export default function PropertyDetailPage() {
     );
   }
 
+  // Separate active and historical leases
+  const activeLeases = leases.filter(
+    (l) => l.status === 'ACTIVE' || l.status === 'NOTICE_GIVEN' || l.status === 'FUTURE'
+  );
+  const historicalLeases = leases.filter((l) => l.status === 'EXPIRED');
+
   return (
     <main className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{property.name}</h1>
-            <p className="text-gray-600 mt-1">{property.address}</p>
-            {property.type && (
-              <span className="inline-flex items-center px-2.5 py-0.5 mt-2 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                {property.type}
-              </span>
-            )}
+            <h1 className="text-3xl font-bold text-gray-900">{tenant.name}</h1>
+            <p className="text-gray-600 mt-1">
+              Commercial Tenant • {metrics?.propertiesCount || 0} {metrics?.propertiesCount === 1 ? 'property' : 'properties'}
+            </p>
           </div>
           <div className="space-x-2">
             <Link
@@ -179,15 +164,13 @@ export default function PropertyDetailPage() {
 
         {/* Summary KPIs */}
         {metrics && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                Occupancy
+                Active Leases
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {metrics.occupancyPct !== null
-                  ? `${metrics.occupancyPct.toFixed(0)}%`
-                  : '—'}
+                {metrics.activeLeasesCount}
               </p>
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -200,136 +183,43 @@ export default function PropertyDetailPage() {
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                Active Leases
+                Avg Remaining Term
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {metrics.activeLeasesCount}
+                {metrics.avgRemainingTermYears !== null
+                  ? `${metrics.avgRemainingTermYears.toFixed(1)} years`
+                  : '—'}
               </p>
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                Total Spaces
+                Total Leases
               </p>
               <p className="text-2xl font-bold text-gray-900">
-                {metrics.totalSpaces}
-              </p>
-            </div>
-            <div className={`bg-white border rounded-xl p-4 ${
-              metrics.expiring12MoCount > 0 ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
-            }`}>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                Expiring in 12 mo
-              </p>
-              <p className={`text-2xl font-bold ${
-                metrics.expiring12MoCount > 0 ? 'text-orange-700' : 'text-gray-900'
-              }`}>
-                {metrics.expiring12MoCount}
+                {metrics.totalLeasesCount}
               </p>
             </div>
           </div>
         )}
 
-        {/* Spaces Table */}
-        {spaces.length > 0 && (
-          <section className="mb-8">
-            <div className="bg-white border border-gray-200 rounded-2xl p-5">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Spaces</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">
-                        Space
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">
-                        Floor
-                      </th>
-                      <th className="text-right py-2 px-3 font-medium text-gray-600">
-                        Size (SF)
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">
-                        Use Type
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-600">
-                        Current Tenant
-                      </th>
-                      <th className="text-center py-2 px-3 font-medium text-gray-600">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {spaces.map((space) => (
-                      <tr
-                        key={space.id}
-                        className="border-b border-gray-100 hover:bg-gray-50"
-                      >
-                        <td className="py-3 px-3 font-medium text-gray-900">
-                          {space.spaceLabel}
-                        </td>
-                        <td className="py-3 px-3 text-gray-600">
-                          {space.floor || '—'}
-                        </td>
-                        <td className="py-3 px-3 text-right text-gray-900">
-                          {space.areaSqft?.toLocaleString() || '—'}
-                        </td>
-                        <td className="py-3 px-3 text-gray-600">
-                          {space.useType || '—'}
-                        </td>
-                        <td className="py-3 px-3">
-                          {space.currentTenant ? (
-                            <Link
-                              href={`/tenants/${encodeURIComponent(space.currentTenant)}`}
-                              className="text-blue-600 hover:text-blue-800 hover:underline"
-                            >
-                              {space.currentTenant}
-                            </Link>
-                          ) : (
-                            <span className="text-gray-400 italic">Vacant</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          {space.currentLeaseStatus ? (
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusBadgeClass(
-                                space.currentLeaseStatus
-                              )}`}
-                            >
-                              {space.currentLeaseStatus.replace('_', ' ')}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-gray-100 text-gray-600 border-gray-300">
-                              VACANT
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Leases Table */}
+        {/* Active Leases Table */}
         <section className="mb-8">
           <div className="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Leases at this Property
+              Active Leases
             </h2>
-            {leases.length === 0 ? (
-              <p className="text-gray-500 italic">No leases for this property</p>
+            {activeLeases.length === 0 ? (
+              <p className="text-gray-500 italic">No active leases</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-2 px-3 font-medium text-gray-600">
-                        Space
+                        Property
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-600">
-                        Tenant
+                        Space
                       </th>
                       <th className="text-center py-2 px-3 font-medium text-gray-600">
                         Status
@@ -349,21 +239,21 @@ export default function PropertyDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {leases.map((lease) => (
+                    {activeLeases.map((lease) => (
                       <tr
                         key={lease.id}
                         className="border-b border-gray-100 hover:bg-gray-50"
                       >
-                        <td className="py-3 px-3 text-gray-900">
-                          {lease.suite || '—'}
-                        </td>
                         <td className="py-3 px-3">
                           <Link
-                            href={`/tenants/${encodeURIComponent(lease.tenantName)}`}
+                            href={`/properties/${lease.property.id}`}
                             className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                           >
-                            {lease.tenantName}
+                            {lease.property.name}
                           </Link>
+                        </td>
+                        <td className="py-3 px-3 text-gray-900">
+                          {lease.suite || '—'}
                         </td>
                         <td className="py-3 px-3 text-center">
                           <span
@@ -400,32 +290,110 @@ export default function PropertyDetailPage() {
           </div>
         </section>
 
-        {/* Property Details */}
-        {(property.ownerEntity || property.assetManager || property.notes) && (
+        {/* Historical Leases Table */}
+        {historicalLeases.length > 0 && (
           <section className="mb-8">
             <div className="bg-white border border-gray-200 rounded-2xl p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Property Details
+                Lease History
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {property.ownerEntity && (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Owner Entity</p>
-                    <p className="font-medium text-gray-900">{property.ownerEntity}</p>
-                  </div>
-                )}
-                {property.assetManager && (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Asset Manager</p>
-                    <p className="font-medium text-gray-900">{property.assetManager}</p>
-                  </div>
-                )}
-                {property.notes && (
-                  <div className="md:col-span-2">
-                    <p className="text-sm text-gray-600 mb-1">Notes</p>
-                    <p className="text-gray-900">{property.notes}</p>
-                  </div>
-                )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">
+                        Property
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">
+                        Space
+                      </th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-600">
+                        Status
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">
+                        Start
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">
+                        End
+                      </th>
+                      <th className="text-right py-2 px-3 font-medium text-gray-600">
+                        Monthly Rent
+                      </th>
+                      <th className="text-center py-2 px-3 font-medium text-gray-600">
+                        View
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historicalLeases.map((lease) => (
+                      <tr
+                        key={lease.id}
+                        className="border-b border-gray-100 hover:bg-gray-50 opacity-75"
+                      >
+                        <td className="py-3 px-3">
+                          <Link
+                            href={`/properties/${lease.property.id}`}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          >
+                            {lease.property.name}
+                          </Link>
+                        </td>
+                        <td className="py-3 px-3 text-gray-900">
+                          {lease.suite || '—'}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusBadgeClass(
+                              lease.status
+                            )}`}
+                          >
+                            {lease.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-gray-600">
+                          {formatDate(lease.leaseStart)}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600">
+                          {formatDate(lease.leaseEnd)}
+                        </td>
+                        <td className="py-3 px-3 text-right text-gray-900">
+                          {formatCurrency(lease.baseRent)}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <Link
+                            href={`/leases/${lease.id}`}
+                            className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                          >
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Properties List */}
+        {properties.length > 1 && (
+          <section className="mb-8">
+            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Properties with this Tenant
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {properties.map((property) => (
+                  <Link
+                    key={property.id}
+                    href={`/properties/${property.id}`}
+                    className="block bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+                  >
+                    <p className="font-semibold text-gray-900">{property.name}</p>
+                    <p className="text-sm text-gray-600">{property.address}</p>
+                  </Link>
+                ))}
               </div>
             </div>
           </section>

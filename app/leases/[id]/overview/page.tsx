@@ -99,13 +99,15 @@ export default async function LeaseOverviewPage({ params }: PageProps) {
 
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          <InfoCard
+          <InfoCardLink
             label="Tenant Name"
             value={getValue(lease.tenantName, extractedData?.tenantName)}
+            href={`/tenants/${encodeURIComponent(lease.tenantName)}`}
           />
-          <InfoCard
+          <InfoCardLink
             label="Property"
             value={getValue(lease.property.name, extractedData?.propertyName)}
+            href={`/properties/${lease.property.id}`}
           />
           <InfoCard label="Suite" value={getValue(lease.suite, extractedData?.suite)} />
 
@@ -272,6 +274,29 @@ function InfoCard({
       <p className={`font-medium ${highlight || 'text-gray-900'}`}>
         {value || 'N/A'}
       </p>
+    </div>
+  );
+}
+
+// Info Card with Link Component
+function InfoCardLink({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: string | null;
+  href: string;
+}) {
+  return (
+    <div>
+      <p className="text-sm text-gray-600 mb-1">{label}</p>
+      <Link
+        href={href}
+        className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+      >
+        {value || 'N/A'}
+      </Link>
     </div>
   );
 }
