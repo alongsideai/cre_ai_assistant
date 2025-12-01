@@ -11,14 +11,21 @@ datasource db {
 }
 
 model Property {
-  id        String   @id @default(cuid())
-  name      String
-  address   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  address      String
+  type         String?  // RETAIL, OFFICE, INDUSTRIAL, MIXED_USE
+  timeZone     String   @default("America/New_York")
+  ownerEntity  String?
+  assetManager String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  leases    Lease[]
-  documents Document[]
+  leases       Lease[]
+  documents    Document[]
+  spaces       Space[]
+  workOrders   WorkOrder[]
 
   @@index([name])
 }
@@ -83,4 +90,136 @@ model DocumentChunk {
 
   @@index([documentId])
   @@index([documentId, chunkIndex])
+}
+
+// Maintenance Module Models
+
+model Space {
+  id          String     @id @default(cuid())
+  property    Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId  String
+  spaceLabel  String     // "Suite 120", "Bay 4", "3rd Floor East Wing"
+  floor       String?
+  areaSqft    Int?
+  useType     String?    // RETAIL, OFFICE, WAREHOUSE, etc.
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  occupiers   Occupier[]
+  workOrders  WorkOrder[]
+
+  @@index([propertyId])
+  @@index([spaceLabel])
+}
+
+model Occupier {
+  id                   String    @id @default(cuid())
+  space                Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  spaceId              String
+  legalName            String
+  brandName            String?
+  primaryContactName   String?
+  primaryContactEmail  String?
+  primaryContactPhone  String?
+  storeNumber          String?
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  workOrders           WorkOrder[]
+
+  @@index([spaceId])
+  @@index([legalName])
+  @@index([brandName])
+}
+
+model Vendor {
+  id          String   @id @default(cuid())
+  name        String
+  trade       String   // ROOFING, HVAC, PLUMBING, ELECTRICAL, GENERAL_CONTRACTOR, etc.
+  email       String?
+  phone       String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workOrders  WorkOrder[] @relation("VendorWorkOrders")
+
+  @@index([trade])
+  @@index([name])
+}
+
+model WorkOrder {
+  id                   String      @id @default(cuid())
+  property             Property    @relation(fields: [propertyId], references: [id])
+  propertyId           String
+  space                Space?      @relation(fields: [spaceId], references: [id])
+  spaceId              String?
+  occupier             Occupier?   @relation(fields: [occupierId], references: [id])
+  occupierId           String?
+  vendor               Vendor?     @relation("VendorWorkOrders", fields: [assignedVendorId], references: [id])
+  assignedVendorId     String?
+
+  status               String      // NEW, ASSIGNED, IN_PROGRESS, COMPLETED, CANCELLED
+  priority             String      // LOW, MEDIUM, HIGH, EMERGENCY
+  issueCategory        String      // ROOFING, HVAC, PLUMBING, ELECTRICAL, LIFE_SAFETY, GENERAL, OTHER
+  businessImpact       String?     // MINOR, MODERATE, MAJOR, CRITICAL
+  summary              String
+  description          String
+  requiresOwnerApproval Boolean    @default(false)
+  estimatedCost        Float?
+  maxApprovedCost      Float?
+
+  sourceEmailText      String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  dueAt                DateTime?
+  vendorConfirmedAt    DateTime?   // When vendor confirmed dispatch (for demo simulation)
+  notes                String?
+
+  messages             Message[]
+  scheduledActions     ScheduledAction[]
+
+  @@index([propertyId])
+  @@index([spaceId])
+  @@index([occupierId])
+  @@index([status])
+  @@index([priority])
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  workOrder      WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderId    String
+
+  recipientType  String    // OCCUPIER, VENDOR, INTERNAL
+  channel        String    // EMAIL, NOTE
+  subject        String
+  body           String
+  status         String    // DRAFT, SENT, CANCELLED
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+  meta           String?   // JSON string (SQLite doesn't support Json natively)
+
+  @@index([workOrderId])
+  @@index([recipientType])
+}
+
+model ScheduledAction {
+  id             String    @id @default(cuid())
+  workOrder      WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderId    String
+
+  actionType     String    // VENDOR_FOLLOWUP, OCCUPIER_CHECKIN, ESCALATION_INTERNAL
+  status         String    // PENDING, EXECUTED, CANCELLED
+  scheduledFor   DateTime
+  payload        String    // JSON string (SQLite doesn't support Json natively)
+  description    String
+  createdAt      DateTime  @default(now())
+  executedAt     DateTime?
+
+  @@index([workOrderId])
+  @@index([status])
+  @@index([scheduledFor])
 }

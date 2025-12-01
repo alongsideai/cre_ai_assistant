@@ -139,6 +139,12 @@ export default function DashboardPage() {
               Upload Documents
             </Link>
             <Link
+              href="/maintenance"
+              className="inline-block bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 transition-colors"
+            >
+              Maintenance
+            </Link>
+            <Link
               href="/properties"
               className="inline-block bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
             >
