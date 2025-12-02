@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { computeLeaseRisk } from '@/lib/leaseRisk';
 import LeaseOverviewActions from '@/components/leases/LeaseOverviewActions';
+import LeaseClauseQA from '@/components/leases/LeaseClauseQA';
 
 interface PageProps {
   params: {
@@ -252,6 +253,11 @@ export default async function LeaseOverviewPage({ params }: PageProps) {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Clause-based Q&A Card */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <LeaseClauseQA leaseId={lease.id} tenantName={lease.tenantName} />
         </div>
       </div>
     </div>

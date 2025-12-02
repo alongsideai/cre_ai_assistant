@@ -45,6 +45,7 @@ model Lease {
 
   property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   documents   Document[]
+  clauses     LeaseClause[]
 
   @@index([propertyId])
   @@index([tenantName])
@@ -238,4 +239,24 @@ model ScheduledAction {
   @@index([workOrderId])
   @@index([status])
   @@index([scheduledFor])
+}
+
+// Lease Clause RAG Model - for clause-level responsibility Q&A
+model LeaseClause {
+  id               String   @id @default(cuid())
+  lease            Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  leaseId          String
+
+  topic            String   // HVAC, ROOF, STRUCTURE, CAM, INSURANCE, INDEMNITY, PARKING, SIGNAGE, ACCESS, UTILITIES, GENERAL_MAINTENANCE, OTHER
+  responsibleParty String   // LANDLORD, TENANT, SHARED, UNKNOWN
+  sectionLabel     String?  // e.g. "Section 4.2 – Maintenance & Repairs"
+  text             String   // Full clause text or chunk
+  embedding        String?  // JSON string array of floats for vector search
+  pageNumber       Int?
+
+  createdAt        DateTime @default(now())
+
+  @@index([leaseId])
+  @@index([topic])
+  @@index([responsibleParty])
 }
